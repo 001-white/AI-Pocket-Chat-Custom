@@ -371,7 +371,10 @@ verticalArrangement = Arrangement.spacedBy(8.dp),
 ) {
 Row(verticalAlignment = Alignment.CenterVertically) {
 Column(modifier = Modifier.weight(1f)) {
-Text(cfg.providerName, style = MaterialTheme.typography.titleSmall)
+Text(
+    cfg.displayName.ifBlank { cfg.providerName },
+    style = MaterialTheme.typography.titleSmall,
+)
 Text(cfg.modelName, style = MaterialTheme.typography.bodySmall)
 BalanceLabel(balance)
 }
