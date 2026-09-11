@@ -107,7 +107,7 @@ val MIGRATION_10_11 = object : Migration(10, 11) {
 
 val MIGRATION_11_12 = object : Migration(11, 12) {
     override fun migrate(db: SupportSQLiteDatabase) {
-        db.execSQL("CREATE TABLE IF NOT EXISTS `gift_records` (`uuid` TEXT NOT NULL, `timestamp` INTEGER NOT NULL, `senderType` TEXT NOT NULL, `senderCharacterUUID` TEXT NOT NULL, `receiverType` TEXT NOT NULL, `receiverCharacterUUID` TEXT NOT NULL, `giftItemId` TEXT NOT NULL, `pricePaid` INTEGER NOT NULL, `isDIY` INTEGER NOT NULL, `diyTitle` TEXT NOT NULL, `diyContent` TEXT NOT NULL, `diyImagePath` TEXT, `context` TEXT NOT NULL, `senderMessage` TEXT NOT NULL, `reactionText` TEXT NOT NULL, `reactionMoodEmoji` TEXT NOT NULL, `affinityGain` INTEGER NOT NULL, `relationshipImpactJSON` TEXT NOT NULL, PRIMARY KEY(`uuid`))")
+        db.execSQL("CREATE TABLE IF NOT EXISTS `gift_records` (`uuid` TEXT NOT NULL, `timestamp` INTEGER NOT NULL, `senderType` TEXT NOT NULL, `senderCharacterUUID` TEXT NOT NULL, `receiverType` TEXT NOT NULL, `receiverCharacterUUID` TEXT NOT NULL, `giftItemId` TEXT NOT NULL, `pricePaid` INTEGER NOT NULL, `isDIY` INTEGER NOT NULL, `diyTitle` TEXT NOT NULL, `diyContent` TEXT NOT NULL, `diyImagePath` TEXT NOT NULL, `context` TEXT NOT NULL, `senderMessage` TEXT NOT NULL, `reactionText` TEXT NOT NULL, `reactionMoodEmoji` TEXT NOT NULL, `affinityGain` INTEGER NOT NULL, `relationshipImpactJSON` TEXT NOT NULL, PRIMARY KEY(`uuid`))")
         db.execSQL("CREATE INDEX IF NOT EXISTS `index_gift_records_receiverCharacterUUID` ON `gift_records` (`receiverCharacterUUID`)")
         db.execSQL("CREATE INDEX IF NOT EXISTS `index_gift_records_senderCharacterUUID` ON `gift_records` (`senderCharacterUUID`)")
         db.execSQL("CREATE INDEX IF NOT EXISTS `index_gift_records_timestamp` ON `gift_records` (`timestamp`)")
@@ -314,10 +314,10 @@ val MIGRATION_23_24 = object : Migration(23, 24) {
     }
 }
 
-/** v24→v25（日记重设计 R6-3①·孤儿信语义 A「人走信留」·契约 `FABLE5_DIARY_REDESIGN_PROPOSAL.md` §6）：
+/** v24→v25（日记重设计 R6-3①·孤儿信语义 A「人走信留」·契约 `FABLE5_DIARY_REDESIGN_PROPOSAL.md §6）：
  *  `diary_entries` 加 `authorNameSnapshot`（nullable·交换日记作者名快照）+ 一次性从 `characters` 回填存量
  *  交换日记的作者名（角色仍在的照抄名字；已删的查不到 → 保持 NULL）。纯增量·旧行零丢失·列类型与
- *  Room 生成的 25.json createSql 一致（MigrationTest 逐步校验 + 回填断言）。 */
+ *  Room 生成的 25.json createSql 一致（MigrationTest 逐版本校验 + 回填断言）。 */
 val MIGRATION_24_25 = object : Migration(24, 25) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL("ALTER TABLE diary_entries ADD COLUMN authorNameSnapshot TEXT")
@@ -438,7 +438,7 @@ val MIGRATION_27_28 = object : Migration(27, 28) {
  *  `docs/handoff/2026-07-04-线下见面梦剧场.md` §3.2）：新建 `offline_meeting_memories`（每次见面一行的结构化回忆·
  *  两索引 characterUuid/sessionId）。**不在迁移里搬数据**——旧 blob（`characters.offlineMeetingMemorySummary`）
  *  冻结只读，播种走懒路径（Repository.ensureSeeded 首次访问解析）。DDL 逐字取自 Room 生成的 29.json createSql
- *  （字节级一致），MigrationTest 校验；纯增量·旧表零丢失。 */
+ *  （字节级一致），MigrationTest 校验；纯增量·旧行零丢失。 */
 val MIGRATION_28_29 = object : Migration(28, 29) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL(
@@ -505,7 +505,7 @@ val MIGRATION_31_32 = object : Migration(31, 32) {
  *  ② `offline_meeting_memories` 加 `digestedAtMillis`（可空·降级前消化标记·NULL=未消化）；
  *  ③ `diary_entries` 加 `digestedAtMillis`（可空·交换日记回流消化标记）；
  *  ④ `characters` 加 `momentsDigestedUntilMillis`（NOT NULL 默认 0·朋友圈消化水位线·0=从未消化）。
- *  DDL 逐字取自 Room 生成的 33.json createSql（字节级一致），MigrationTest 校验；纯增量·旧表零丢失。 */
+ *  DDL 逐字取自 Room 生成的 33.json createSql（字节级一致），MigrationTest 校验；纯增量·旧行零丢失。 */
 val MIGRATION_32_33 = object : Migration(32, 33) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL(
@@ -525,8 +525,8 @@ val MIGRATION_32_33 = object : Migration(32, 33) {
 /** v33→v34（记忆改造二期·部件⑤ 场内滚动压缩·前情提要·图纸 §3.2-A / §3.4）：
  *  conversations 加三列 `inSceneRecapText`（TEXT NOT NULL 默认 ''·前情提要正文）、
  *  `inSceneRecapSessionKey`（TEXT NOT NULL 默认 ''·惰性失效判据 key）、
- *  `inSceneRecapUntilMillis`（INTEGER NOT NULL 默认 0·已覆盖水位）。
- *  DDL 逐字取自 Room 生成的 34.json createSql（字节级一致），MigrationTest 校验；纯增量·旧表零丢失。 */
+ *  `inSceneRecapUntilMillis`（INTEGER NOT NULL 默认 0·已覆盖水位）。 
+ *  DDL 逐字取自 Room 生成的 34.json createSql（字节级一致），MigrationTest 校验；纯增量·旧行零丢失。 */
 val MIGRATION_33_34 = object : Migration(33, 34) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL("ALTER TABLE conversations ADD COLUMN inSceneRecapText TEXT NOT NULL DEFAULT ''")
@@ -612,7 +612,7 @@ val MIGRATION_40_41 = object : Migration(40, 41) {
 
 /** v41→v42（故事「我的模板」·图纸 docs/handoff/2026-08-02-故事提示词实验室-图纸四.md §3.2）：
  *  新建 `user_story_templates` 表（整套创作设定存单列 JSON·无索引无外键·与故事表零关联）。
- *  DDL 逐字取自 Room 生成的 42.json createSql（`${'$'}{TABLE_NAME}` 换成真表名，其余字节一致），MigrationTest 校验；
+ *  DDL 逐字取自 Room 生成的 42.json createSql（`${'$'}{TABLE_NAME}` 换真表名，其余字节一致），MigrationTest 校验；
  *  纯建表·旧表零触碰·零数据改写。 */
 val MIGRATION_41_42 = object : Migration(41, 42) {
     override fun migrate(db: SupportSQLiteDatabase) {
@@ -694,7 +694,7 @@ val MIGRATION_46_47 = object : Migration(46, 47) {
 val MIGRATION_47_48 = object : Migration(47, 48) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL(
-                "CREATE TABLE IF NOT EXISTS `our_days` (`uuid` TEXT NOT NULL, `characterUuid` TEXT NOT NULL, " +
+            "CREATE TABLE IF NOT EXISTS `our_days` (`uuid` TEXT NOT NULL, `characterUuid` TEXT NOT NULL, " +
                 "`dayKey` TEXT NOT NULL, `factsJson` TEXT NOT NULL, `messageCount` INTEGER NOT NULL, " +
                 "`callSeconds` INTEGER NOT NULL, `hasMeeting` INTEGER NOT NULL, `hasRelation` INTEGER NOT NULL, " +
                 "`hasLife` INTEGER NOT NULL, `note` TEXT NOT NULL, `factLine` TEXT NOT NULL, `noteStatus` TEXT NOT NULL, " +
@@ -713,6 +713,27 @@ val MIGRATION_47_48 = object : Migration(47, 48) {
 val MIGRATION_48_49 = object : Migration(48, 49) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL("ALTER TABLE `conversations` ADD COLUMN `offlineEndHoldTurns` INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
+/**
+ * v49→v50（API 配置自定义显示名称）：
+ * `api_configurations` 新增 `displayName`。
+ *
+ * 这是一个纯增量迁移：
+ * - 不删除、不修改原有 API 配置字段
+ * - 存量配置的 displayName 使用原来的 providerName 回填
+ * - 新建/编辑配置时由 Repository 保存用户填写的显示名称
+ * - 用户没有填写时，Repository 会使用 Provider 的默认显示名称
+ */
+val MIGRATION_49_50 = object : Migration(49, 50) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "ALTER TABLE `api_configurations` ADD COLUMN `displayName` TEXT NOT NULL DEFAULT ''",
+        )
+        db.execSQL(
+            "UPDATE `api_configurations` SET `displayName` = `providerName` WHERE `displayName` = ''",
+        )
     }
 }
 
@@ -766,4 +787,5 @@ val ALL_MIGRATIONS = arrayOf(
     MIGRATION_46_47,
     MIGRATION_47_48,
     MIGRATION_48_49,
+    MIGRATION_49_50,
 )
