@@ -22,7 +22,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.situ.aichat.R
+import com.situ.aichat.data.local.entity.ApiConfigEntity
 import com.situ.aichat.data.model.ApiProviderType
 import com.situ.aichat.data.model.AudioInputMode
 import com.situ.aichat.data.model.ThinkingBudgetLevel
@@ -45,12 +48,11 @@ import com.situ.aichat.ui.liuli.page.LiuliSaveBar
 import com.situ.aichat.ui.liuli.page.liuliSaveBarInset
 import com.situ.aichat.ui.liuli.page.rememberLargeTitleCollapsed
 import com.situ.aichat.ui.settings.ApiConfigViewModel
-import com.situ.aichat.data.local.entity.ApiConfigEntity
 import com.situ.aichat.ui.settings.ApiSaveFeedback
 import com.situ.aichat.ui.settings.ModelCatalogUiState
-import kotlinx.coroutines.flow.Flow
 import com.situ.aichat.ui.settings.ToolDetectionStatusBlock
 import com.situ.aichat.ui.settings.resolveNewApiKey
+import kotlinx.coroutines.flow.Flow
 
 /** 两处硬编码中文（与暖陶 `ApiConfigEditScreen.kt:148 / :171` 同值·A-6）。 */
 private const val PROVIDER_LABEL = "服务商"
