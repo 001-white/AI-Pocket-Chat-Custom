@@ -67,12 +67,20 @@ fun ApiConfigEditScreen(
     var provider by remember(config?.uuid) {
         mutableStateOf(config?.let { ApiProviderType.fromRaw(it.providerTypeRaw) } ?: ApiProviderType.DEEPSEEK)
     }
+
+    // User-defined display name for this API configuration.
+    var displayName by remember(config?.uuid) {
+        mutableStateOf(config?.displayName ?: "")
+    }
+
     var baseUrl by remember(config?.uuid) { mutableStateOf(config?.baseURL ?: "") }
     var model by remember(config?.uuid) { mutableStateOf(config?.modelName ?: "") }
+
     // key 预填：进屏后把加密库里已存的 key 读出填入（默认打码·点眼睛可见），「拉取模型列表」因此能拿到真 key。
     // storedKey 同时留作保存时的比对基准——没真改就传 null 保持不变，避免误触发重写密钥库 + 重跑能力检测。
     var apiKey by remember(config?.uuid) { mutableStateOf("") }
     var storedKey by remember(config?.uuid) { mutableStateOf("") }
+
     LaunchedEffect(config?.uuid) {
         if (config != null) {
             val loaded = viewModel.storedApiKey(uuid)
@@ -80,35 +88,44 @@ fun ApiConfigEditScreen(
             if (apiKey.isEmpty()) apiKey = loaded
         }
     }
+
     var thinkingMode by remember(config?.uuid) {
         mutableStateOf(config?.let { ThinkingModelMode.fromRaw(it.thinkingModelModeRaw) } ?: ThinkingModelMode.AUTO)
     }
+
     var toolMode by remember(config?.uuid) {
         mutableStateOf(config?.let { ToolCallingMode.fromRaw(it.toolCallingModeRaw) } ?: ToolCallingMode.AUTO)
     }
+
     var visionMode by remember(config?.uuid) {
         mutableStateOf(config?.let { VisionMode.fromRaw(it.visionModeRaw) } ?: VisionMode.AUTO)
     }
+
     var audioMode by remember(config?.uuid) {
         mutableStateOf(config?.let { AudioInputMode.fromRaw(it.audioInputModeRaw) } ?: AudioInputMode.AUTO)
     }
+
     var thinkingLevel by remember(config?.uuid) {
         mutableStateOf(config?.let { ThinkingBudgetLevel.fromRaw(it.thinkingBudgetLevelRaw) } ?: ThinkingBudgetLevel.AUTO)
     }
+
     var providerMenuOpen by remember { mutableStateOf(false) }
 
     val support = ThinkingBudgetSupport.resolve(provider, baseUrl, model)
+
     val effectiveThinking = when (thinkingMode) {
         ThinkingModelMode.THINKING -> true
         ThinkingModelMode.STANDARD -> false
         ThinkingModelMode.AUTO -> config?.detectedThinkingModelType == 1
     }
+
     val showIntensity = effectiveThinking && support.showsControl
 
     // settings-api-5：保存失败（Keychain/DB）留在编辑屏弹错误，不再静默返回丢密钥；成功由 VM onSaved 正常返回。
     val snackbarHostState = remember { SnackbarHostState() }
     val keychainFailMsg = stringResource(R.string.api_save_failed_keychain)
     val dbFailMsg = stringResource(R.string.api_save_failed_db)
+
     LaunchedEffect(Unit) {
         viewModel.feedback.collect { fb ->
             when (fb) {
@@ -120,6 +137,7 @@ fun ApiConfigEditScreen(
     }
 
     val scrollState = rememberScrollState()
+
     Scaffold(
         topBar = {
             AppTopBar(
@@ -161,7 +179,16 @@ fun ApiConfigEditScreen(
                 }
             }
 
+            // User-defined API display name
+            AppTextField(
+                value = displayName,
+                onValueChange = { displayName = it },
+                label = "API 名称",
+                modifier = Modifier.fillMaxWidth(),
+            )
+
             val urlInsecure = baseUrl.isNotBlank() && !isHttpsBaseUrl(baseUrl)
+
             AppTextField(
                 value = baseUrl,
                 onValueChange = {
@@ -180,6 +207,7 @@ fun ApiConfigEditScreen(
                 state = modelCatalogState,
                 onFetch = { viewModel.fetchModels(provider, baseUrl, apiKey) },
             )
+
             KnownCapabilityHint(model)
 
             ApiKeyField(
@@ -193,6 +221,7 @@ fun ApiConfigEditScreen(
             )
 
             AppListDivider(startInset = 0.dp)
+
             Text(
                 stringResource(R.string.api_section_capabilities),
                 style = MaterialTheme.typography.titleMedium,
@@ -202,7 +231,8 @@ fun ApiConfigEditScreen(
             ModePickerRow(
                 title = stringResource(R.string.api_row_thinking),
                 badge = if (thinkingMode == ThinkingModelMode.AUTO) {
-                    stringResource(R.string.api_det_prefix) + thinkingDetectedText(config?.detectedThinkingModelType ?: -1)
+                    stringResource(R.string.api_det_prefix) +
+                        thinkingDetectedText(config?.detectedThinkingModelType ?: -1)
                 } else {
                     null
                 },
@@ -224,6 +254,7 @@ fun ApiConfigEditScreen(
                     selected = support.normalized(thinkingLevel),
                     onSelect = { thinkingLevel = it },
                 )
+
                 Text(
                     levelHint(support.normalized(thinkingLevel)),
                     style = MaterialTheme.typography.bodySmall,
@@ -237,11 +268,16 @@ fun ApiConfigEditScreen(
                 title = stringResource(R.string.api_row_tool),
                 badge = null,
                 options = capabilityModeOptions { auto, enabled, disabled ->
-                    listOf(auto to ToolCallingMode.AUTO, enabled to ToolCallingMode.ENABLED, disabled to ToolCallingMode.DISABLED)
+                    listOf(
+                        auto to ToolCallingMode.AUTO,
+                        enabled to ToolCallingMode.ENABLED,
+                        disabled to ToolCallingMode.DISABLED,
+                    )
                 },
                 selected = toolMode,
                 onSelect = { toolMode = it },
             )
+
             if (config != null) {
                 ToolDetectionStatusBlock(
                     config = config,
@@ -255,12 +291,17 @@ fun ApiConfigEditScreen(
             ModePickerRow(
                 title = stringResource(R.string.api_row_vision),
                 badge = if (visionMode == VisionMode.AUTO) {
-                    stringResource(R.string.api_det_prefix) + capDetectedText(config?.detectedVisionSupport ?: -1)
+                    stringResource(R.string.api_det_prefix) +
+                        capDetectedText(config?.detectedVisionSupport ?: -1)
                 } else {
                     null
                 },
                 options = capabilityModeOptions { auto, enabled, disabled ->
-                    listOf(auto to VisionMode.AUTO, enabled to VisionMode.ENABLED, disabled to VisionMode.DISABLED)
+                    listOf(
+                        auto to VisionMode.AUTO,
+                        enabled to VisionMode.ENABLED,
+                        disabled to VisionMode.DISABLED,
+                    )
                 },
                 selected = visionMode,
                 onSelect = { visionMode = it },
@@ -270,12 +311,17 @@ fun ApiConfigEditScreen(
             ModePickerRow(
                 title = stringResource(R.string.api_row_audio),
                 badge = if (audioMode == AudioInputMode.AUTO) {
-                    stringResource(R.string.api_det_prefix) + capDetectedText(config?.detectedAudioInputSupport ?: -1)
+                    stringResource(R.string.api_det_prefix) +
+                        capDetectedText(config?.detectedAudioInputSupport ?: -1)
                 } else {
                     null
                 },
                 options = capabilityModeOptions { auto, enabled, disabled ->
-                    listOf(auto to AudioInputMode.AUTO, enabled to AudioInputMode.ENABLED, disabled to AudioInputMode.DISABLED)
+                    listOf(
+                        auto to AudioInputMode.AUTO,
+                        enabled to AudioInputMode.ENABLED,
+                        disabled to AudioInputMode.DISABLED,
+                    )
                 },
                 selected = audioMode,
                 onSelect = { audioMode = it },
@@ -284,9 +330,11 @@ fun ApiConfigEditScreen(
             AppButton(
                 onClick = {
                     if (config == null) return@AppButton
+
                     viewModel.updateConfig(
                         uuid = uuid,
                         provider = provider,
+                        displayName = displayName,
                         baseUrl = baseUrl,
                         model = model,
                         newApiKey = resolveNewApiKey(apiKey, storedKey),
@@ -299,7 +347,10 @@ fun ApiConfigEditScreen(
                     )
                 },
                 style = AppButtonStyle.Primary,
-                enabled = config != null && baseUrl.isNotBlank() && model.isNotBlank() && isHttpsBaseUrl(baseUrl),
+                enabled = config != null &&
+                    baseUrl.isNotBlank() &&
+                    model.isNotBlank() &&
+                    isHttpsBaseUrl(baseUrl),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 8.dp),
@@ -321,7 +372,9 @@ internal fun resolveNewApiKey(input: String, storedKey: String): String? =
 
 /** Shared auto/enabled/disabled option labels, mapped to a provider-specific mode enum. */
 @Composable
-private fun <T> capabilityModeOptions(build: (String, String, String) -> List<Pair<String, T>>): List<Pair<String, T>> =
+private fun <T> capabilityModeOptions(
+    build: (String, String, String) -> List<Pair<String, T>>,
+): List<Pair<String, T>> =
     build(
         stringResource(R.string.api_cmode_auto),
         stringResource(R.string.api_cmode_enabled),
@@ -338,10 +391,17 @@ private fun <T> ModePickerRow(
     onSelect: (T) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
+
     val selectedLabel = options.firstOrNull { it.second == selected }?.first.orEmpty()
+
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+            Text(
+                title,
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.weight(1f),
+            )
+
             if (badge != null) {
                 Text(
                     badge,
@@ -350,6 +410,7 @@ private fun <T> ModePickerRow(
                 )
             }
         }
+
         AppDropdownField(
             value = selectedLabel,
             expanded = expanded,
@@ -360,7 +421,10 @@ private fun <T> ModePickerRow(
                 AppDropdownMenuItem(
                     text = label,
                     selected = value == selected,
-                    onClick = { onSelect(value); expanded = false },
+                    onClick = {
+                        onSelect(value)
+                        expanded = false
+                    },
                 )
             }
         }
