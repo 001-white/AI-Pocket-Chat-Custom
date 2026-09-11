@@ -71,6 +71,7 @@ class ApiConfigRepository @Inject constructor(
      */
     suspend fun addConfig(
         providerType: ApiProviderType,
+        displayName: String,
         baseUrl: String,
         modelName: String,
         apiKey: String,
@@ -78,12 +79,15 @@ class ApiConfigRepository @Inject constructor(
     ): AddConfigOutcome {
         val uuid = UUID.randomUUID().toString()
         val apiKeyId = UUID.randomUUID().toString()
+
         // 非空 key 写失败 = 致命（对齐 iOS create 分支 keychain-fail 中止）；空 key 无需写。
         if (apiKey.isNotEmpty() && !keyStore.put(apiKeyId, apiKey)) {
             return AddConfigOutcome(null, ConfigSaveResult.KEYCHAIN_FAILED)
         }
+
         val entity = ApiConfigEntity(
             uuid = uuid,
+            displayName = displayName.trim().ifEmpty { providerType.displayName },
             providerName = providerType.displayName,
             providerTypeRaw = providerType.raw,
             apiKeyId = apiKeyId,
@@ -93,11 +97,14 @@ class ApiConfigRepository @Inject constructor(
             creationDate = System.currentTimeMillis(),
             detectedToolProtocolFamilyRaw = providerType.toolProtocolFamily.raw,
         )
+
         runCatching { dao.upsert(entity) }.getOrElse {
             keyStore.delete(apiKeyId) // 回滚已写入的 key（对齐 iOS create-mode 回滚）
             return AddConfigOutcome(null, ConfigSaveResult.DB_FAILED)
         }
+
         if (makeActive) setActive(uuid)
+
         return AddConfigOutcome(uuid, ConfigSaveResult.SUCCESS)
     }
 
@@ -132,6 +139,7 @@ class ApiConfigRepository @Inject constructor(
             existing.baseURL != trimmedUrl ||
             existing.modelName != trimmedModel ||
             keyChanged
+
         // settings-api-5：key 写失败 = 中止保存（对齐 iOS edit 分支 setApiKey 失败 return），不继续写 DB。
         if (keyChanged && !keyStore.put(existing.apiKeyId, newApiKey.trim())) {
             return UpdateConfigOutcome(ConfigSaveResult.KEYCHAIN_FAILED, false)
@@ -162,10 +170,13 @@ class ApiConfigRepository @Inject constructor(
             thinkingBudgetLevelRaw = persistedLevel.raw,
             detectedToolProtocolFamilyRaw = providerType.toolProtocolFamily.raw,
         )
+
         if (inputChanged) updated = updated.resettingCapabilityDetectionResults()
+
         runCatching { dao.update(updated) }.getOrElse {
             return UpdateConfigOutcome(ConfigSaveResult.DB_FAILED, false)
         }
+
         return UpdateConfigOutcome(ConfigSaveResult.SUCCESS, inputChanged)
     }
 
@@ -210,7 +221,9 @@ class ApiConfigRepository @Inject constructor(
         val source = dao.getByUuid(uuid) ?: return null
         val newUuid = UUID.randomUUID().toString()
         val newApiKeyId = UUID.randomUUID().toString()
+
         keyStore.put(newApiKeyId, keyStore.get(source.apiKeyId).orEmpty())
+
         dao.upsert(
             source.copy(
                 uuid = newUuid,
@@ -220,6 +233,7 @@ class ApiConfigRepository @Inject constructor(
                 creationDate = System.currentTimeMillis(),
             ),
         )
+
         return newUuid
     }
 
@@ -232,14 +246,22 @@ class ApiConfigRepository @Inject constructor(
      * / Anthropic `capabilities.image_input.supported`——各家 models 接口里只有这两家给）。它比名字表可靠，
      * 故**优先于名字表**；null = 该服务商没给这项信息，回落名字表。
      */
-    suspend fun prefillFromKnownCapabilities(uuid: String, catalogVision: Boolean? = null): ApiConfigEntity? {
+    suspend fun prefillFromKnownCapabilities(
+        uuid: String,
+        catalogVision: Boolean? = null
+    ): ApiConfigEntity? {
         val entity = dao.getByUuid(uuid) ?: return null
         var prefilled = entity.prefilledFromKnownCapabilities()
+
         if (catalogVision != null && prefilled.visionMode == VisionMode.AUTO) {
             // 官方元数据是权威：名字表若已填过（可能填错，如把 `*-vision-exp` 当成基础款）也照样覆盖。
-            prefilled = prefilled.copy(detectedVisionSupport = if (catalogVision) 1 else 0)
+            prefilled = prefilled.copy(
+                detectedVisionSupport = if (catalogVision) 1 else 0
+            )
         }
+
         if (prefilled != entity) dao.update(prefilled)
+
         return prefilled
     }
 
@@ -255,12 +277,18 @@ class ApiConfigRepository @Inject constructor(
      * settings-api-6：返回 anyUndetermined = 最后一个执行的 auto 探针（thinking/vision/audio 中，**不含 tool**）
      * 是否返回 -1（对齐 iOS detectionHint「最近探针胜出、确定结果清除」语义）。供列表卡显示「检测无法判定」提示。
      */
-    suspend fun runCapabilityDetections(uuid: String, catalogVision: Boolean? = null): Boolean {
+    suspend fun runCapabilityDetections(
+        uuid: String,
+        catalogVision: Boolean? = null
+    ): Boolean {
         val entity = prefillFromKnownCapabilities(uuid, catalogVision) ?: return false
+
         var thinkingProbe: Int? = null
         var visionProbe: Int? = null
         var audioProbe: Int? = null
+
         val key = keyStore.get(entity.apiKeyId).orEmpty()
+
         val probe = ApiConfigValues(
             providerType = ApiProviderType.fromRaw(entity.providerTypeRaw),
             apiKey = key,
@@ -272,9 +300,11 @@ class ApiConfigRepository @Inject constructor(
         )
 
         var thinkingType = entity.detectedThinkingModelType
+
         if (entity.thinkingModelMode == ThinkingModelMode.AUTO) {
             val result = capabilityDetector.detectThinkingModelType(probe)
             thinkingProbe = result
+
             if (result != -1 || entity.detectedThinkingModelType == -1) {
                 dao.updateThinkingDetection(uuid, result)
                 thinkingType = result
@@ -283,10 +313,17 @@ class ApiConfigRepository @Inject constructor(
 
         if (entity.toolCallingMode == ToolCallingMode.AUTO) {
             val modelLower = entity.modelName.lowercase()
+
             val shouldProbeThinkingTools =
                 entity.copy(detectedThinkingModelType = thinkingType).effectiveIsThinkingModel() ||
-                    modelLower.contains("reasoner") || modelLower.contains("thinking")
-            val result = capabilityDetector.detectToolCallingSupport(probe, shouldProbeThinkingTools)
+                    modelLower.contains("reasoner") ||
+                    modelLower.contains("thinking")
+
+            val result = capabilityDetector.detectToolCallingSupport(
+                probe,
+                shouldProbeThinkingTools
+            )
+
             dao.updateToolDetection(
                 uuid = uuid,
                 levelRaw = result.level.raw,
@@ -298,13 +335,25 @@ class ApiConfigRepository @Inject constructor(
             )
         }
 
-        // 官方元数据在场时**不跑视觉探针**：它比探针可靠（探针把任何 400 都读成「不支持」，而中转站
-        // 为参数不认 / 限流返 400 很常见），跑了还会反过来覆盖权威值——这正是契约 A8 说的「免跑探针」。
+        // 官方元数据在场时**不跑视觉探针**：它比探针可靠（探针把任何 400 都读成「不支持」，
+        // 而中转站为参数不认 / 限流返 400 很常见），跑了还会反过来覆盖权威值——这正是契约 A8
+        // 说的「免跑探针」。
         if (entity.visionMode == VisionMode.AUTO && catalogVision == null) {
             val result = capabilityDetector.detectVisionSupport(probe)
-            visionProbe = result  // anyUndetermined 判的是**护栏前**的原始探针值，语义不变
-            val guarded = guardedProbeWriteback(result, KnownModelCapabilityTable.lookup(entity.modelName)?.hasVision)
-            if (guarded != result) Log.i(TAG, "写回护栏·vision model=${entity.modelName} 探针=$result → 写回=$guarded")
+            visionProbe = result
+
+            val guarded = guardedProbeWriteback(
+                result,
+                KnownModelCapabilityTable.lookup(entity.modelName)?.hasVision
+            )
+
+            if (guarded != result) {
+                Log.i(
+                    TAG,
+                    "写回护栏·vision model=${entity.modelName} 探针=$result → 写回=$guarded"
+                )
+            }
+
             if (guarded != -1 || entity.detectedVisionSupport == -1) {
                 dao.updateVisionDetection(uuid, guarded)
             }
@@ -313,18 +362,34 @@ class ApiConfigRepository @Inject constructor(
         if (entity.audioInputMode == AudioInputMode.AUTO) {
             val result = capabilityDetector.detectAudioInputSupport(probe)
             audioProbe = result
-            val guarded = guardedProbeWriteback(result, KnownModelCapabilityTable.lookup(entity.modelName)?.hasAudioInput)
-            if (guarded != result) Log.i(TAG, "写回护栏·audio model=${entity.modelName} 探针=$result → 写回=$guarded")
+
+            val guarded = guardedProbeWriteback(
+                result,
+                KnownModelCapabilityTable.lookup(entity.modelName)?.hasAudioInput
+            )
+
+            if (guarded != result) {
+                Log.i(
+                    TAG,
+                    "写回护栏·audio model=${entity.modelName} 探针=$result → 写回=$guarded"
+                )
+            }
+
             if (guarded != -1 || entity.detectedAudioInputSupport == -1) {
                 dao.updateAudioDetection(uuid, guarded)
             }
         }
-        // 最后执行的 auto 探针（audio→vision→thinking 优先级）== -1 → 不确定（tool 不计入，对齐 iOS）。
+
+        // 最后执行的 auto 探针（audio→vision→thinking 优先级）== -1 → 不确定
+        // （tool 不计入，对齐 iOS）。
         return (audioProbe ?: visionProbe ?: thinkingProbe) == -1
     }
 
     /** Clear all detection results then re-run detection (the "重新检测" action). 返回 anyUndetermined（settings-api-6）。 */
-    suspend fun redetectCapabilities(uuid: String, catalogVision: Boolean? = null): Boolean {
+    suspend fun redetectCapabilities(
+        uuid: String,
+        catalogVision: Boolean? = null
+    ): Boolean {
         dao.resetDetection(uuid)
         return runCapabilityDetections(uuid, catalogVision)
     }
@@ -332,7 +397,9 @@ class ApiConfigRepository @Inject constructor(
     /** Query the account balance for a config (resolves its key); null if no key stored (skip). */
     suspend fun fetchBalance(config: ApiConfigEntity): ApiBalanceResult? {
         val key = keyStore.get(config.apiKeyId).orEmpty()
+
         if (key.isEmpty()) return null
+
         return balanceService.fetchBalance(
             providerType = ApiProviderType.fromRaw(config.providerTypeRaw),
             baseUrl = config.baseURL,
@@ -354,6 +421,7 @@ class ApiConfigRepository @Inject constructor(
      */
     suspend fun resolveConfigValues(function: ApiFunction): ApiConfigValues? {
         val assignedUuid = functionRouter.assignedId(function)
+
         val entity = if (assignedUuid != null) {
             dao.getByUuid(assignedUuid) ?: run {
                 functionRouter.clearAssignmentsForConfig(assignedUuid)
@@ -362,7 +430,9 @@ class ApiConfigRepository @Inject constructor(
         } else {
             dao.getActive()
         } ?: return null
+
         val key = keyStore.get(entity.apiKeyId).orEmpty()
+
         return entity.toConfigValues(key)
     }
 
