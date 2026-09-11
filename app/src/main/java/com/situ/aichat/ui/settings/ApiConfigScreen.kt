@@ -99,7 +99,6 @@ val assignments by viewModel.assignments.collectAsStateWithLifecycle() // settin
 val undetermined by viewModel.undetermined.collectAsStateWithLifecycle() // settings-api-6 检测不确定提示
 val exportPayload by viewModel.exportPayload.collectAsStateWithLifecycle() // 13.10b 扫码导出
 
-```
 // Auto-refresh balances once the config list first appears (mirrors iOS refresh-on-appear).
 LaunchedEffect(configs.isNotEmpty()) {
     if (configs.isNotEmpty()) viewModel.refreshBalances()
@@ -420,7 +419,7 @@ onClick = { onExportQr(); menuOpen = false },
 }
 }
 
-```
+
         CapabilityBadges(cfg = cfg, isDetecting = isDetecting)
 
         // settings-api-6：最近检测返回「不确定」时的原因提示（橙/error 色，对齐 iOS detectionHint）。
@@ -515,7 +514,7 @@ color = MaterialTheme.colorScheme.onSurfaceVariant,
 return
 }
 
-```
+
 val labels = buildList {
     if (cfg.effectiveIsThinkingModel()) add(stringResource(R.string.api_capability_thinking))
     if (cfg.effectiveVisionEnabled()) add(stringResource(R.string.api_capability_vision))
