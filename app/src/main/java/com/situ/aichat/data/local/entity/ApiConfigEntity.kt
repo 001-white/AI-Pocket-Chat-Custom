@@ -15,6 +15,10 @@ import androidx.room.PrimaryKey
 )
 data class ApiConfigEntity(
     @PrimaryKey val uuid: String,
+
+    // User-defined display name for this API configuration
+    val displayName: String = "",
+
     val providerName: String,
     val providerTypeRaw: String = "deepseek",
     val apiKeyId: String,
