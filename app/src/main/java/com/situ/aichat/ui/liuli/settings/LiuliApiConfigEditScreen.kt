@@ -22,8 +22,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.situ.aichat.R
 import com.situ.aichat.data.model.ApiProviderType
 import com.situ.aichat.data.model.AudioInputMode
@@ -56,6 +54,7 @@ import com.situ.aichat.ui.settings.resolveNewApiKey
 
 /** 两处硬编码中文（与暖陶 `ApiConfigEditScreen.kt:148 / :171` 同值·A-6）。 */
 private const val PROVIDER_LABEL = "服务商"
+private const val API_NAME_LABEL = "API 名称"
 private const val BASE_URL_LABEL = "Base URL"
 
 /** 本屏同时只许一个下拉展开——用一枚枚举当「谁开着」的钥匙。 */
@@ -82,9 +81,12 @@ fun LiuliApiConfigEditScreen(
     val modelCatalogState by viewModel.modelCatalogState.collectAsStateWithLifecycle()
     val detecting by viewModel.detecting.collectAsStateWithLifecycle()
     val config = configs.firstOrNull { it.uuid == uuid }
+
     // 已存 key 只有 VM 拿得到；读回来交给内容层当 [resolveNewApiKey] 的比对基准（安全逻辑零碰）。
     var loadedKey by remember(config?.uuid) { mutableStateOf("") }
-    LaunchedEffect(config?.uuid) { if (config != null) loadedKey = viewModel.storedApiKey(uuid) }
+    LaunchedEffect(config?.uuid) {
+        if (config != null) loadedKey = viewModel.storedApiKey(uuid)
+    }
 
     LiuliApiConfigEditContent(
         uuid = uuid,
@@ -94,12 +96,15 @@ fun LiuliApiConfigEditScreen(
         isDetecting = uuid in detecting,
         feedback = viewModel.feedback,
         onClearModels = viewModel::clearModels,
-        onFetchModels = { provider, baseUrl, key -> viewModel.fetchModels(provider, baseUrl, key) },
+        onFetchModels = { provider, baseUrl, key ->
+            viewModel.fetchModels(provider, baseUrl, key)
+        },
         onRedetect = { viewModel.redetect(uuid) },
-        onSave = { p, b, m, k, tm, tc, vm, am, lv ->
+        onSave = { p, name, b, m, k, tm, tc, vm, am, lv ->
             viewModel.updateConfig(
                 uuid = uuid,
                 provider = p,
+                displayName = name,
                 baseUrl = b,
                 model = m,
                 newApiKey = k,
@@ -119,7 +124,7 @@ fun LiuliApiConfigEditScreen(
 
 /**
  * API 编辑页内容层（纯参数·可测）。草稿态住这里（暖陶也一样住屏里），VM 只在外层订阅与写。
- * [feedback] 是保存失败的事件流（Keychain / DB）；[onSave] 的九个实参与
+ * [feedback] 是保存失败的事件流（Keychain / DB）；[onSave] 的实参与
  * [ApiConfigViewModel.updateConfig] 一一对应，`newApiKey` 已由本层经 [resolveNewApiKey] 归一。
  */
 @Composable
@@ -134,8 +139,16 @@ internal fun LiuliApiConfigEditContent(
     onFetchModels: (ApiProviderType, String, String) -> Unit,
     onRedetect: () -> Unit,
     onSave: (
-        ApiProviderType, String, String, String?,
-        ThinkingModelMode, ToolCallingMode, VisionMode, AudioInputMode, ThinkingBudgetLevel,
+        ApiProviderType,
+        String,
+        String,
+        String,
+        String?,
+        ThinkingModelMode,
+        ToolCallingMode,
+        VisionMode,
+        AudioInputMode,
+        ThinkingBudgetLevel,
     ) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
@@ -144,56 +157,108 @@ internal fun LiuliApiConfigEditContent(
     val modelCatalogState = catalogState
 
     var provider by remember(config?.uuid) {
-        mutableStateOf(config?.let { ApiProviderType.fromRaw(it.providerTypeRaw) } ?: ApiProviderType.DEEPSEEK)
+        mutableStateOf(
+            config?.let { ApiProviderType.fromRaw(it.providerTypeRaw) }
+                ?: ApiProviderType.DEEPSEEK
+        )
     }
-    var baseUrl by remember(config?.uuid) { mutableStateOf(config?.baseURL ?: "") }
-    var model by remember(config?.uuid) { mutableStateOf(config?.modelName ?: "") }
+
+    // User-defined display name for this API configuration.
+    var displayName by remember(config?.uuid) {
+        mutableStateOf(config?.displayName ?: "")
+    }
+
+    var baseUrl by remember(config?.uuid) {
+        mutableStateOf(config?.baseURL ?: "")
+    }
+
+    var model by remember(config?.uuid) {
+        mutableStateOf(config?.modelName ?: "")
+    }
+
     // key 预填：进屏后把加密库里已存的 key 读出填入（默认打码·点眼睛可见），「拉取模型列表」因此能拿到真 key。
     // storedKey 同时留作保存时的比对基准（逐字照暖陶 :72–81）。
     var apiKey by remember(config?.uuid) { mutableStateOf("") }
-    LaunchedEffect(storedKey) { if (apiKey.isEmpty()) apiKey = storedKey }
+
+    LaunchedEffect(storedKey) {
+        if (apiKey.isEmpty()) apiKey = storedKey
+    }
+
     var thinkingMode by remember(config?.uuid) {
-        mutableStateOf(config?.let { ThinkingModelMode.fromRaw(it.thinkingModelModeRaw) } ?: ThinkingModelMode.AUTO)
+        mutableStateOf(
+            config?.let { ThinkingModelMode.fromRaw(it.thinkingModelModeRaw) }
+                ?: ThinkingModelMode.AUTO
+        )
     }
+
     var toolMode by remember(config?.uuid) {
-        mutableStateOf(config?.let { ToolCallingMode.fromRaw(it.toolCallingModeRaw) } ?: ToolCallingMode.AUTO)
+        mutableStateOf(
+            config?.let { ToolCallingMode.fromRaw(it.toolCallingModeRaw) }
+                ?: ToolCallingMode.AUTO
+        )
     }
+
     var visionMode by remember(config?.uuid) {
-        mutableStateOf(config?.let { VisionMode.fromRaw(it.visionModeRaw) } ?: VisionMode.AUTO)
+        mutableStateOf(
+            config?.let { VisionMode.fromRaw(it.visionModeRaw) }
+                ?: VisionMode.AUTO
+        )
     }
+
     var audioMode by remember(config?.uuid) {
-        mutableStateOf(config?.let { AudioInputMode.fromRaw(it.audioInputModeRaw) } ?: AudioInputMode.AUTO)
+        mutableStateOf(
+            config?.let { AudioInputMode.fromRaw(it.audioInputModeRaw) }
+                ?: AudioInputMode.AUTO
+        )
     }
+
     var thinkingLevel by remember(config?.uuid) {
-        mutableStateOf(config?.let { ThinkingBudgetLevel.fromRaw(it.thinkingBudgetLevelRaw) } ?: ThinkingBudgetLevel.AUTO)
+        mutableStateOf(
+            config?.let { ThinkingBudgetLevel.fromRaw(it.thinkingBudgetLevelRaw) }
+                ?: ThinkingBudgetLevel.AUTO
+        )
     }
+
     var openMenu by remember { mutableStateOf<EditMenu?>(null) }
 
     val support = ThinkingBudgetSupport.resolve(provider, baseUrl, model)
+
     val effectiveThinking = when (thinkingMode) {
         ThinkingModelMode.THINKING -> true
         ThinkingModelMode.STANDARD -> false
         ThinkingModelMode.AUTO -> config?.detectedThinkingModelType == 1
     }
+
     val showIntensity = effectiveThinking && support.showsControl
 
     // settings-api-5：保存失败（Keychain/DB）留在编辑屏弹错误，不再静默返回丢密钥（逐字照暖陶 :110–120）。
     val snackbarHostState = remember { SnackbarHostState() }
     val keychainFailMsg = stringResource(R.string.api_save_failed_keychain)
     val dbFailMsg = stringResource(R.string.api_save_failed_db)
+
     LaunchedEffect(Unit) {
         feedback.collect { fb ->
             when (fb) {
-                ApiSaveFeedback.KeychainFailed -> snackbarHostState.showSnackbar(keychainFailMsg)
-                ApiSaveFeedback.DbFailed -> snackbarHostState.showSnackbar(dbFailMsg)
-                ApiSaveFeedback.SavedCreate -> Unit // 新建反馈属列表屏，编辑屏忽略
+                ApiSaveFeedback.KeychainFailed ->
+                    snackbarHostState.showSnackbar(keychainFailMsg)
+
+                ApiSaveFeedback.DbFailed ->
+                    snackbarHostState.showSnackbar(dbFailMsg)
+
+                ApiSaveFeedback.SavedCreate ->
+                    Unit // 新建反馈属列表屏，编辑屏忽略
             }
         }
     }
 
     val title = stringResource(R.string.api_edit_title)
     val urlInsecure = baseUrl.isNotBlank() && !isHttpsBaseUrl(baseUrl)
-    val canSave = config != null && baseUrl.isNotBlank() && model.isNotBlank() && isHttpsBaseUrl(baseUrl)
+    val canSave =
+        config != null &&
+            baseUrl.isNotBlank() &&
+            model.isNotBlank() &&
+            isHttpsBaseUrl(baseUrl)
+
     val bottomInset = LiuliPageGeometry.pageBottom +
         liuliSaveBarInset +
         WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -209,9 +274,18 @@ internal fun LiuliApiConfigEditContent(
                 enabled = canSave,
                 onClick = {
                     if (config == null) return@LiuliSaveBar
+
                     onSave(
-                        provider, baseUrl, model, resolveNewApiKey(apiKey, storedKey),
-                        thinkingMode, toolMode, visionMode, audioMode, thinkingLevel,
+                        provider,
+                        displayName,
+                        baseUrl,
+                        model,
+                        resolveNewApiKey(apiKey, storedKey),
+                        thinkingMode,
+                        toolMode,
+                        visionMode,
+                        audioMode,
+                        thinkingLevel,
                     )
                 },
             )
@@ -219,16 +293,28 @@ internal fun LiuliApiConfigEditContent(
     ) {
         LazyColumn(
             // C4：键盘弹起时 API key 等字段可滚到键盘上方（逐字照暖陶）。
-            modifier = Modifier.fillMaxSize().imePadding().contentMaxWidth(),
+            modifier = Modifier
+                .fillMaxSize()
+                .imePadding()
+                .contentMaxWidth(),
             state = listState,
-            contentPadding = PaddingValues(top = LiuliPageGeometry.navRow, bottom = bottomInset),
+            contentPadding = PaddingValues(
+                top = LiuliPageGeometry.navRow,
+                bottom = bottomInset,
+            ),
         ) {
-            item(key = "large-title") { LiuliLargeTitle(title) }
+            item(key = "large-title") {
+                LiuliLargeTitle(title)
+            }
+
             item(key = "groups") {
                 Column(
                     Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = LiuliPageGeometry.gutter, vertical = LiuliPageGeometry.titleGap),
+                        .padding(
+                            horizontal = LiuliPageGeometry.gutter,
+                            vertical = LiuliPageGeometry.titleGap,
+                        ),
                 ) {
                     LiuliGroup(footer = liuliKnownCapabilityHint(model)) {
                         LiuliMenuRow(
@@ -238,13 +324,25 @@ internal fun LiuliApiConfigEditContent(
                                 LiuliMenuEntry(
                                     text = p.displayName,
                                     selected = provider == p,
-                                    onClick = { provider = p; onClearModels() },
+                                    onClick = {
+                                        provider = p
+                                        onClearModels()
+                                    },
                                 )
                             },
                             expanded = openMenu == EditMenu.Provider,
-                            onExpandedChange = { openMenu = if (it) EditMenu.Provider else null },
+                            onExpandedChange = {
+                                openMenu = if (it) EditMenu.Provider else null
+                            },
                             divider = false,
                         )
+
+                        LiuliInputRow(
+                            label = API_NAME_LABEL,
+                            value = displayName,
+                            onValueChange = { displayName = it },
+                        )
+
                         LiuliInputRow(
                             label = BASE_URL_LABEL,
                             value = baseUrl,
@@ -252,19 +350,37 @@ internal fun LiuliApiConfigEditContent(
                                 baseUrl = it
                                 onClearModels() // 换了端点，旧列表即刻作废
                             },
-                            supportingText = if (urlInsecure) stringResource(R.string.api_url_https_required) else null,
+                            supportingText = if (urlInsecure) {
+                                stringResource(R.string.api_url_https_required)
+                            } else {
+                                null
+                            },
                         )
+
                         LiuliCatalogField(
                             value = model,
                             onValueChange = { model = it },
                             label = LiuliApiText.MODEL_LABEL,
-                            items = modelCatalogState.models.map { it.id to (it.subtitle?.let { s -> "${it.name} · $s" } ?: it.name) },
+                            items = modelCatalogState.models.map {
+                                it.id to (
+                                    it.subtitle?.let { s -> "${it.name} · $s" }
+                                        ?: it.name
+                                    )
+                            },
                             loading = modelCatalogState.isLoading,
                             error = modelCatalogState.error,
-                            onFetch = { onFetchModels(provider, baseUrl, apiKey) },
+                            onFetch = {
+                                onFetchModels(provider, baseUrl, apiKey)
+                            },
                             emptyHint = stringResource(R.string.api_model_no_match),
-                            fetchedEmptyHint = if (modelCatalogState is ModelCatalogUiState.Empty) stringResource(R.string.api_models_empty_hint) else null,
+                            fetchedEmptyHint =
+                                if (modelCatalogState is ModelCatalogUiState.Empty) {
+                                    stringResource(R.string.api_models_empty_hint)
+                                } else {
+                                    null
+                                },
                         )
+
                         LiuliApiKeyRow(
                             value = apiKey,
                             onValueChange = {
@@ -277,13 +393,19 @@ internal fun LiuliApiConfigEditContent(
 
                     LiuliGroup(
                         header = stringResource(R.string.api_section_capabilities),
-                        footer = if (showIntensity) liuliLevelHint(support.normalized(thinkingLevel)) else null,
+                        footer = if (showIntensity) {
+                            liuliLevelHint(support.normalized(thinkingLevel))
+                        } else {
+                            null
+                        },
                     ) {
                         LiuliModePickerRow(
                             title = stringResource(R.string.api_row_thinking),
                             badge = if (thinkingMode == ThinkingModelMode.AUTO) {
                                 stringResource(R.string.api_det_prefix) +
-                                    liuliThinkingDetectedText(config?.detectedThinkingModelType ?: -1)
+                                    liuliThinkingDetectedText(
+                                        config?.detectedThinkingModelType ?: -1
+                                    )
                             } else {
                                 null
                             },
@@ -295,21 +417,29 @@ internal fun LiuliApiConfigEditContent(
                             selected = thinkingMode,
                             onSelect = { thinkingMode = it },
                             expanded = openMenu == EditMenu.Thinking,
-                            onExpandedChange = { openMenu = if (it) EditMenu.Thinking else null },
+                            onExpandedChange = {
+                                openMenu = if (it) EditMenu.Thinking else null
+                            },
                             divider = false,
                         )
+
                         // 思考强度只在「实际是思考模型 + 该服务商真有这档控制」时出（逐字照暖陶 :106）。
                         if (showIntensity) {
                             LiuliModePickerRow(
                                 title = stringResource(R.string.api_row_thinking_intensity),
                                 badge = null,
-                                options = support.allowedLevels.map { liuliLevelLabel(it) to it },
+                                options = support.allowedLevels.map {
+                                    liuliLevelLabel(it) to it
+                                },
                                 selected = support.normalized(thinkingLevel),
                                 onSelect = { thinkingLevel = it },
                                 expanded = openMenu == EditMenu.Intensity,
-                                onExpandedChange = { openMenu = if (it) EditMenu.Intensity else null },
+                                onExpandedChange = {
+                                    openMenu = if (it) EditMenu.Intensity else null
+                                },
                             )
                         }
+
                         LiuliModePickerRow(
                             title = stringResource(R.string.api_row_tool),
                             badge = null,
@@ -323,10 +453,16 @@ internal fun LiuliApiConfigEditContent(
                             selected = toolMode,
                             onSelect = { toolMode = it },
                             expanded = openMenu == EditMenu.Tool,
-                            onExpandedChange = { openMenu = if (it) EditMenu.Tool else null },
+                            onExpandedChange = {
+                                openMenu = if (it) EditMenu.Tool else null
+                            },
                         )
+
                         if (config != null) {
-                            LiuliRowBase(verticalPadding = LiuliPageGeometry.rowTwoLinePad, verticalAlignment = Alignment.Top) {
+                            LiuliRowBase(
+                                verticalPadding = LiuliPageGeometry.rowTwoLinePad,
+                                verticalAlignment = Alignment.Top,
+                            ) {
                                 // 纯状态块·读 MaterialTheme 取色自动对档（§9 ⑤ 明列「禁重写」= 直接借用）。
                                 ToolDetectionStatusBlock(
                                     config = config,
@@ -336,27 +472,39 @@ internal fun LiuliApiConfigEditContent(
                                 )
                             }
                         }
+
                         LiuliModePickerRow(
                             title = stringResource(R.string.api_row_vision),
                             badge = if (visionMode == VisionMode.AUTO) {
                                 stringResource(R.string.api_det_prefix) +
-                                    liuliCapDetectedText(config?.detectedVisionSupport ?: -1)
+                                    liuliCapDetectedText(
+                                        config?.detectedVisionSupport ?: -1
+                                    )
                             } else {
                                 null
                             },
                             options = liuliCapabilityModeOptions { auto, enabled, disabled ->
-                                listOf(auto to VisionMode.AUTO, enabled to VisionMode.ENABLED, disabled to VisionMode.DISABLED)
+                                listOf(
+                                    auto to VisionMode.AUTO,
+                                    enabled to VisionMode.ENABLED,
+                                    disabled to VisionMode.DISABLED,
+                                )
                             },
                             selected = visionMode,
                             onSelect = { visionMode = it },
                             expanded = openMenu == EditMenu.Vision,
-                            onExpandedChange = { openMenu = if (it) EditMenu.Vision else null },
+                            onExpandedChange = {
+                                openMenu = if (it) EditMenu.Vision else null
+                            },
                         )
+
                         LiuliModePickerRow(
                             title = stringResource(R.string.api_row_audio),
                             badge = if (audioMode == AudioInputMode.AUTO) {
                                 stringResource(R.string.api_det_prefix) +
-                                    liuliCapDetectedText(config?.detectedAudioInputSupport ?: -1)
+                                    liuliCapDetectedText(
+                                        config?.detectedAudioInputSupport ?: -1
+                                    )
                             } else {
                                 null
                             },
@@ -370,12 +518,18 @@ internal fun LiuliApiConfigEditContent(
                             selected = audioMode,
                             onSelect = { audioMode = it },
                             expanded = openMenu == EditMenu.Audio,
-                            onExpandedChange = { openMenu = if (it) EditMenu.Audio else null },
+                            onExpandedChange = {
+                                openMenu = if (it) EditMenu.Audio else null
+                            },
                         )
                     }
                 }
             }
         }
-        LiuliSnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter))
+
+        LiuliSnackbarHost(
+            snackbarHostState,
+            Modifier.align(Alignment.BottomCenter),
+        )
     }
 }
