@@ -70,7 +70,6 @@ private const val SAVE_AND_ACTIVATE_LABEL = "保存并启用"
   onValueChange = onDisplayNameChange,
   )
 
-  ```
    LiuliMenuRow(
        title = PROVIDER_LABEL,
        value = provider.displayName,
@@ -130,7 +129,6 @@ private const val SAVE_AND_ACTIVATE_LABEL = "保存并启用"
            Text(SAVE_AND_ACTIVATE_LABEL)
        }
    }
-  ```
 
   }
   }
